@@ -12,6 +12,8 @@
       --coral: #ff6f61;
       --mint: #7adfc4;
       --sky: #79c7ff;
+      --lilac: #c7b8ff;
+      --rose: #ffd2da;
       --deep: #23395d;
       --panel: rgba(255, 255, 255, 0.74);
       --shadow: rgba(31, 45, 71, 0.22);
@@ -29,8 +31,9 @@
       font-family: "Trebuchet MS", "Comic Sans MS", "Marker Felt", cursive;
       background:
         radial-gradient(circle at 12% 18%, rgba(255, 242, 215, 0.95) 0 12%, transparent 13%),
+        radial-gradient(circle at 50% 92%, rgba(199, 184, 255, 0.42) 0 18%, transparent 19%),
         radial-gradient(circle at 82% 12%, rgba(122, 223, 196, 0.66) 0 10%, transparent 11%),
-        linear-gradient(145deg, #7fc8ff 0%, #ffd39c 52%, #ff8d84 100%);
+        linear-gradient(145deg, #7fc8ff 0%, #ffe0aa 45%, #ffd2da 72%, #c7b8ff 100%);
       display: grid;
       place-items: center;
       touch-action: none;
@@ -96,7 +99,7 @@
       font-size: clamp(28px, 5vw, 50px);
       letter-spacing: 0.05em;
       color: var(--deep);
-      text-shadow: 2px 3px 0 rgba(255, 255, 255, 0.75);
+      text-shadow: 2px 3px 0 rgba(255, 242, 215, 0.82), 0 0 18px rgba(255, 223, 102, 0.36);
       line-height: 1;
     }
 
@@ -144,7 +147,7 @@
       display: grid;
       place-items: center;
       padding: 24px;
-      background: radial-gradient(circle at center, rgba(255, 242, 215, 0.9), rgba(255, 111, 97, 0.22));
+      background: radial-gradient(circle at center, rgba(255, 242, 215, 0.92), rgba(199, 184, 255, 0.28), rgba(255, 111, 97, 0.16));
       opacity: 0;
       transform: scale(1.06);
       pointer-events: none;
@@ -162,7 +165,7 @@
       padding: 28px;
       border-radius: 30px;
       text-align: center;
-      background: rgba(255, 255, 255, 0.9);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(255, 242, 215, 0.9));
       border: 4px solid #fff;
       box-shadow: 0 24px 70px rgba(21, 35, 60, 0.28);
     }
@@ -414,7 +417,7 @@
       <div class="overlay show" id="overlay">
         <div class="modal">
           <h2 id="overlayTitle">准备出发</h2>
-          <p id="overlayText">接住星星和道具，躲开陨石。等级提升后会出现分裂、追踪和伪装星星障碍。</p>
+          <p id="overlayText">你是一名星际快递员，今晚要穿过温柔的宇宙，把失落星光收进信袋。</p>
           <div class="auth-card">
             <div id="guestPanel">
               <div class="auth-row">
@@ -433,6 +436,7 @@
             </div>
             <p class="auth-status" id="authStatus">登录后开始游戏，分数会绑定到账号。</p>
           </div>
+          <p class="auth-status">今晚的银河有些安静，许多星光迷路了。请把它们送回每一扇窗前。</p>
           <button id="startButton">开始游戏</button>
         </div>
       </div>
@@ -498,6 +502,7 @@
       spawnTimer: 0,
       difficulty: 1,
       boss: makeBossState(),
+      story: makeStoryState(),
       keys: new Set(),
       player: { x: 0, y: 0, width: 82, height: 56, speed: 680 },
       drops: [],
@@ -526,6 +531,24 @@
         phase: 1
       };
     }
+
+    function makeStoryState() {
+      return {
+        text: "",
+        time: 0,
+        shownLevels: new Set()
+      };
+    }
+
+    const storyBeats = [
+      { level: 3, text: "第 3 级：月亮邮局亮起小灯，第一封星光信已经盖好邮戳。" },
+      { level: 6, text: "第 6 级：一只睡迷糊的彗星猫蹭过船窗，把尾巴上的星尘借给了你。" },
+      { level: 9, text: "第 9 级：远处的蓝色星港传来晚安广播，请把迷路的星星轻轻放回航道。" },
+      { level: 12, text: "第 12 级：银河像一条发光的毯子，正等你缝回那些漏掉的亮线。" },
+      { level: 15, text: "第 15 级：古老星图醒了，它说每一点星光都有想回去的家。" },
+      { level: 18, text: "第 18 级：你的快递袋开始发暖，里面装着许多人的梦和窗前的微光。" },
+      { level: 21, text: "第 21 级：最远的灯塔向你眨眼，银河今晚不会再孤单了。" }
+    ];
 
     function resize() {
       const rect = canvas.parentElement.getBoundingClientRect();
@@ -573,6 +596,7 @@
         spawnTimer: 0,
         difficulty: 1,
         boss: makeBossState(),
+        story: makeStoryState(),
         drops: [],
         bursts: []
       });
@@ -607,11 +631,25 @@
         state.level = nextLevel;
         state.levelFlash = 1.4;
         burst(state.player.x, state.player.y - 24, "#fff2d7", 28);
+        triggerStoryBeat(previousLevel, nextLevel);
         const bossLevel = getCrossedBossLevel(previousLevel, nextLevel);
         if (bossLevel) {
           enterBoss(bossLevel);
         }
       }
+    }
+
+    function triggerStoryBeat(previousLevel, nextLevel) {
+      const beat = storyBeats.find(item =>
+        item.level > previousLevel &&
+        item.level <= nextLevel &&
+        !state.story.shownLevels.has(item.level)
+      );
+
+      if (!beat) return;
+      state.story.text = beat.text;
+      state.story.time = 4.2;
+      state.story.shownLevels.add(beat.level);
     }
 
     function getCrossedBossLevel(previousLevel, nextLevel) {
@@ -744,6 +782,7 @@
       state.rainbowFlash = Math.max(0, state.rainbowFlash - dt);
       state.levelFlash = Math.max(0, state.levelFlash - dt);
       state.boss.messageTime = Math.max(0, state.boss.messageTime - dt);
+      state.story.time = Math.max(0, state.story.time - dt);
       state.hudTimer -= dt;
       state.difficulty = 1 + state.time / 28 + (state.level - 1) * 0.28;
       state.spawnTimer -= dt;
@@ -878,6 +917,7 @@
       drawPlayer();
       drawBursts();
       drawBossHud(width);
+      drawStoryToast(width);
       drawStatusText(width);
     }
 
@@ -1470,6 +1510,48 @@
       ctx.restore();
     }
 
+    function drawStoryToast(width) {
+      if (state.story.time <= 0 || !state.story.text) return;
+
+      const toastWidth = Math.min(560, width - 44);
+      const x = (width - toastWidth) / 2;
+      const y = state.boss.active ? 128 : 22;
+
+      ctx.save();
+      ctx.globalAlpha = Math.min(state.story.time, 1);
+      ctx.fillStyle = "rgba(255, 250, 238, 0.86)";
+      ctx.strokeStyle = "rgba(255, 223, 102, 0.72)";
+      ctx.lineWidth = 3;
+      roundedRect(x, y, toastWidth, 62, 22);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = "#23395d";
+      ctx.textAlign = "center";
+      ctx.font = "900 17px Trebuchet MS, Comic Sans MS, cursive";
+      wrapText(state.story.text, width / 2, y + 26, toastWidth - 36, 20);
+      ctx.restore();
+    }
+
+    function wrapText(text, x, y, maxWidth, lineHeight) {
+      let line = "";
+      let lineCount = 0;
+      for (const char of text) {
+        const testLine = line + char;
+        if (ctx.measureText(testLine).width > maxWidth && line) {
+          ctx.fillText(line, x, y + lineCount * lineHeight);
+          line = char;
+          lineCount += 1;
+          if (lineCount >= 2) break;
+        } else {
+          line = testLine;
+        }
+      }
+      if (line && lineCount < 2) {
+        ctx.fillText(line, x, y + lineCount * lineHeight);
+      }
+    }
+
     function drawBursts() {
       ctx.save();
       for (const part of state.bursts) {
@@ -1585,8 +1667,21 @@
         localStorage.setItem("starCourierBest", state.best);
       }
       updateHud();
-      showOverlay("任务结束", `你送达了 ${state.score} 点星光。再来一局冲最高分！`, "重新开始");
+      showOverlay("夜航结束", getEndingText(), "重新出发");
       submitScore();
+    }
+
+    function getEndingText() {
+      if (state.score >= 2400) {
+        return `你送达了 ${state.score} 点星光。黎明前，整条银河都亮了起来，连最远的小行星也收到了晚安。`;
+      }
+      if (state.score >= 1200) {
+        return `你送达了 ${state.score} 点星光。月亮邮局为你留了一杯热可可，感谢你把许多梦送回窗边。`;
+      }
+      if (state.score >= 420) {
+        return `你送达了 ${state.score} 点星光。还有星星在路上，但今晚已有好几盏孤单的灯重新亮起。`;
+      }
+      return `你送达了 ${state.score} 点星光。小小的快递袋轻轻发光，下一次夜航会走得更远。`;
     }
 
     async function submitScore() {
