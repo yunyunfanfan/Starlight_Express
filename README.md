@@ -1,0 +1,71 @@
+# 星光快递
+
+一个轻量级浏览器小游戏：驾驶小飞船接住星星、躲开陨石，收集护盾和慢速道具，挑战个人最高分和全站排行榜。
+
+作者：codex  
+第一版用时：半小时完成
+
+## 功能
+
+- 飞船移动、接星星、躲陨石、生命值、连击和等级系统。
+- 蓝色护盾道具可以抵挡一次陨石撞击。
+- 绿色时钟道具可以短时间降低掉落速度。
+- 注册、登录、退出登录。
+- 分数与账号绑定保存到 SQLite 数据库。
+- 支持查看个人历史最高分。
+- 支持查看全站排行榜。
+
+## 运行
+
+项目不需要安装第三方依赖，使用 Node.js 自带能力运行。
+
+```bash
+npm start
+```
+
+然后打开：
+
+```text
+http://localhost:3000/
+```
+
+开发时可以使用自动重启：
+
+```bash
+npm run dev
+```
+
+## 数据库
+
+数据库会在首次启动时自动创建：
+
+```text
+data/game.sqlite
+```
+
+主要数据表：
+
+- `users`：用户账号。
+- `sessions`：登录会话。
+- `scores`：游戏分数，绑定到用户账号。
+
+## API
+
+- `GET /api/health`：健康检查。
+- `POST /api/auth/register`：注册账号。
+- `POST /api/auth/login`：登录账号。
+- `POST /api/auth/logout`：退出登录。
+- `GET /api/auth/me`：查看当前登录用户。
+- `POST /api/scores`：提交当前账号的游戏分数。
+- `GET /api/scores`：查看全站排行榜。
+- `GET /api/me/scores`：查看当前账号的个人历史分数和最高分。
+
+## 文件结构
+
+```text
+.
+├── index.html      # 游戏前端页面
+├── server.js       # Node.js 后端与 SQLite 数据库逻辑
+├── package.json    # 启动脚本
+└── README.md       # 项目说明
+```

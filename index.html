@@ -1,0 +1,1179 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>星光快递</title>
+  <style>
+    :root {
+      --ink: #15233c;
+      --cream: #fff2d7;
+      --sun: #ffbf47;
+      --coral: #ff6f61;
+      --mint: #7adfc4;
+      --sky: #79c7ff;
+      --deep: #23395d;
+      --panel: rgba(255, 255, 255, 0.74);
+      --shadow: rgba(31, 45, 71, 0.22);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      overflow: hidden;
+      color: var(--ink);
+      font-family: "Trebuchet MS", "Comic Sans MS", "Marker Felt", cursive;
+      background:
+        radial-gradient(circle at 12% 18%, rgba(255, 242, 215, 0.95) 0 12%, transparent 13%),
+        radial-gradient(circle at 82% 12%, rgba(122, 223, 196, 0.66) 0 10%, transparent 11%),
+        linear-gradient(145deg, #7fc8ff 0%, #ffd39c 52%, #ff8d84 100%);
+      display: grid;
+      place-items: center;
+      touch-action: none;
+      user-select: none;
+    }
+
+    body::before,
+    body::after {
+      content: "";
+      position: fixed;
+      inset: auto;
+      width: 42vmin;
+      height: 42vmin;
+      border-radius: 42% 58% 64% 36%;
+      background: rgba(255, 255, 255, 0.22);
+      filter: blur(1px);
+      animation: drift 12s ease-in-out infinite alternate;
+      pointer-events: none;
+    }
+
+    body::before {
+      left: -12vmin;
+      bottom: 4vmin;
+    }
+
+    body::after {
+      right: -10vmin;
+      top: 7vmin;
+      animation-delay: -5s;
+    }
+
+    .shell {
+      width: min(94vw, 960px);
+      height: min(92vh, 680px);
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 14px;
+      padding: 18px;
+      position: relative;
+      z-index: 1;
+      animation: pop-in 520ms cubic-bezier(.2, .9, .2, 1.15);
+    }
+
+    .topbar,
+    .instructions {
+      background: var(--panel);
+      border: 3px solid rgba(255, 255, 255, 0.76);
+      border-radius: 26px;
+      box-shadow: 0 20px 60px var(--shadow);
+      backdrop-filter: blur(12px);
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 16px;
+      align-items: center;
+      padding: 14px 16px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(28px, 5vw, 50px);
+      letter-spacing: 0.05em;
+      color: var(--deep);
+      text-shadow: 2px 3px 0 rgba(255, 255, 255, 0.75);
+      line-height: 1;
+    }
+
+    .stats {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .pill {
+      min-width: 92px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: #ffffff;
+      box-shadow: inset 0 -4px 0 rgba(21, 35, 60, 0.08);
+      font-size: 18px;
+      font-weight: 900;
+      text-align: center;
+    }
+
+    .game-card {
+      position: relative;
+      overflow: hidden;
+      border-radius: 34px;
+      border: 5px solid rgba(255, 255, 255, 0.78);
+      background:
+        linear-gradient(rgba(255, 255, 255, 0.05) 2px, transparent 2px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.05) 2px, transparent 2px),
+        linear-gradient(180deg, #28466e 0%, #386b91 48%, #5fb3a4 100%);
+      background-size: 44px 44px, 44px 44px, 100% 100%;
+      box-shadow: 0 28px 70px rgba(35, 57, 93, 0.3);
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: none;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: radial-gradient(circle at center, rgba(255, 242, 215, 0.9), rgba(255, 111, 97, 0.22));
+      opacity: 0;
+      transform: scale(1.06);
+      pointer-events: none;
+      transition: 180ms ease;
+    }
+
+    .overlay.show {
+      opacity: 1;
+      transform: scale(1);
+      pointer-events: auto;
+    }
+
+    .modal {
+      width: min(520px, 92%);
+      padding: 28px;
+      border-radius: 30px;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.9);
+      border: 4px solid #fff;
+      box-shadow: 0 24px 70px rgba(21, 35, 60, 0.28);
+    }
+
+    .modal h2 {
+      margin: 0 0 12px;
+      font-size: clamp(34px, 6vw, 56px);
+      color: var(--coral);
+      text-shadow: 2px 3px 0 rgba(255, 191, 71, 0.32);
+    }
+
+    .modal p {
+      margin: 8px 0 18px;
+      font-size: 20px;
+      line-height: 1.45;
+    }
+
+    .player-field {
+      display: grid;
+      gap: 8px;
+      margin: 0 auto 18px;
+      max-width: 290px;
+      text-align: left;
+      font-size: 16px;
+      font-weight: 900;
+    }
+
+    .auth-card {
+      margin: 0 auto 18px;
+      max-width: 360px;
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.58);
+      border: 2px solid rgba(255, 255, 255, 0.72);
+    }
+
+    .auth-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .auth-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .auth-status {
+      margin: 0;
+      color: var(--deep);
+      font-size: 15px;
+      font-weight: 900;
+    }
+
+    input {
+      width: 100%;
+      border: 3px solid rgba(35, 57, 93, 0.16);
+      border-radius: 18px;
+      padding: 10px 14px;
+      color: var(--deep);
+      background: #fffdf6;
+      font: inherit;
+      font-size: 18px;
+      font-weight: 900;
+      outline: none;
+      box-shadow: inset 0 -4px 0 rgba(21, 35, 60, 0.07);
+    }
+
+    input:focus {
+      border-color: var(--sky);
+    }
+
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 13px 24px;
+      color: #fff;
+      font: inherit;
+      font-size: 20px;
+      font-weight: 900;
+      background: linear-gradient(135deg, var(--coral), #ff9a4d);
+      box-shadow: 0 9px 0 #bd4e44, 0 18px 34px rgba(21, 35, 60, 0.25);
+      transform: translateY(0);
+      cursor: pointer;
+    }
+
+    .secondary-button {
+      color: var(--deep);
+      background: linear-gradient(135deg, #fff2d7, #7adfc4);
+      box-shadow: 0 7px 0 #55ad97, 0 14px 28px rgba(21, 35, 60, 0.18);
+    }
+
+    .secondary-button:active {
+      box-shadow: 0 2px 0 #55ad97, 0 8px 18px rgba(21, 35, 60, 0.18);
+    }
+
+    button:active {
+      transform: translateY(7px);
+      box-shadow: 0 2px 0 #bd4e44, 0 8px 18px rgba(21, 35, 60, 0.22);
+    }
+
+    .leaderboard {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      width: min(270px, calc(100% - 36px));
+      padding: 14px;
+      border: 3px solid rgba(255, 255, 255, 0.68);
+      border-radius: 24px;
+      background: rgba(255, 255, 255, 0.72);
+      box-shadow: 0 16px 46px rgba(21, 35, 60, 0.2);
+      backdrop-filter: blur(10px);
+      pointer-events: none;
+    }
+
+    .leaderboard h2 {
+      margin: 0 0 8px;
+      font-size: 22px;
+      color: var(--deep);
+    }
+
+    .leaderboard ol {
+      margin: 0;
+      padding-left: 24px;
+      font-size: 15px;
+      font-weight: 900;
+    }
+
+    .leaderboard li {
+      margin: 5px 0;
+      padding-left: 2px;
+    }
+
+    .leaderboard .score-line {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .leaderboard small {
+      display: block;
+      margin-top: 8px;
+      color: rgba(21, 35, 60, 0.72);
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .instructions {
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      font-size: 17px;
+      font-weight: 800;
+    }
+
+    .kbd {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 9px;
+      background: #fff;
+      box-shadow: inset 0 -3px 0 rgba(21, 35, 60, 0.12);
+    }
+
+    @keyframes pop-in {
+      from {
+        opacity: 0;
+        transform: translateY(18px) scale(0.98);
+      }
+    }
+
+    @keyframes drift {
+      to {
+        transform: translate(5vmin, -3vmin) rotate(12deg);
+      }
+    }
+
+    @media (max-width: 720px) {
+      .shell {
+        width: 100vw;
+        height: 100vh;
+        padding: 10px;
+        gap: 10px;
+      }
+
+      .topbar {
+        grid-template-columns: 1fr;
+      }
+
+      .stats {
+        justify-content: flex-start;
+      }
+
+      .pill {
+        min-width: auto;
+        flex: 1;
+        font-size: 16px;
+      }
+
+      .instructions {
+        align-items: flex-start;
+        flex-direction: column;
+        font-size: 15px;
+      }
+
+      .leaderboard {
+        top: auto;
+        right: 10px;
+        bottom: 10px;
+        width: min(250px, calc(100% - 20px));
+        padding: 10px;
+      }
+
+      .leaderboard h2 {
+        font-size: 18px;
+      }
+
+      .leaderboard ol {
+        font-size: 13px;
+      }
+
+      .auth-row {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="topbar" aria-label="游戏状态">
+      <h1>星光快递</h1>
+      <div class="stats">
+        <div class="pill">分数 <span id="score">0</span></div>
+        <div class="pill">最高 <span id="best">0</span></div>
+        <div class="pill">生命 <span id="lives">3</span></div>
+        <div class="pill">连击 <span id="combo">0</span></div>
+        <div class="pill">等级 <span id="level">1</span></div>
+        <div class="pill">状态 <span id="power">普通</span></div>
+      </div>
+    </section>
+
+    <section class="game-card">
+      <canvas id="game" aria-label="星光快递游戏区域"></canvas>
+      <div class="overlay show" id="overlay">
+        <div class="modal">
+          <h2 id="overlayTitle">准备出发</h2>
+          <p id="overlayText">接住星星，躲开陨石。蓝色护盾能挡一次撞击，绿色时钟会让陨石变慢。</p>
+          <div class="auth-card">
+            <div id="guestPanel">
+              <div class="auth-row">
+                <input id="username" maxlength="12" placeholder="用户名" autocomplete="username">
+                <input id="password" type="password" minlength="6" placeholder="密码至少6位" autocomplete="current-password">
+              </div>
+              <div class="auth-actions">
+                <button class="secondary-button" id="loginButton" type="button">登录</button>
+                <button class="secondary-button" id="registerButton" type="button">注册</button>
+              </div>
+            </div>
+            <div id="userPanel" hidden>
+              <p class="auth-status">已登录：<span id="currentUser">-</span></p>
+              <p class="auth-status">我的历史最高分：<span id="myBest">暂无</span></p>
+              <button class="secondary-button" id="logoutButton" type="button">退出登录</button>
+            </div>
+            <p class="auth-status" id="authStatus">登录后开始游戏，分数会绑定到账号。</p>
+          </div>
+          <button id="startButton">开始游戏</button>
+        </div>
+      </div>
+      <aside class="leaderboard" aria-label="排行榜">
+        <h2>星光排行榜</h2>
+        <ol id="leaderboardList">
+          <li>正在连接数据库...</li>
+        </ol>
+        <small id="leaderboardStatus">启动后端后会自动保存分数</small>
+      </aside>
+    </section>
+
+    <section class="instructions">
+      <span>电脑：<span class="kbd">A</span>/<span class="kbd">D</span> 或方向键移动，<span class="kbd">空格</span> 暂停</span>
+      <span>手机：手指拖动飞船，接住金色星星和道具。</span>
+    </section>
+  </main>
+
+  <script>
+    const canvas = document.querySelector("#game");
+    const ctx = canvas.getContext("2d");
+    const scoreEl = document.querySelector("#score");
+    const bestEl = document.querySelector("#best");
+    const livesEl = document.querySelector("#lives");
+    const comboEl = document.querySelector("#combo");
+    const levelEl = document.querySelector("#level");
+    const powerEl = document.querySelector("#power");
+    const overlay = document.querySelector("#overlay");
+    const overlayTitle = document.querySelector("#overlayTitle");
+    const overlayText = document.querySelector("#overlayText");
+    const startButton = document.querySelector("#startButton");
+    const usernameEl = document.querySelector("#username");
+    const passwordEl = document.querySelector("#password");
+    const loginButton = document.querySelector("#loginButton");
+    const registerButton = document.querySelector("#registerButton");
+    const logoutButton = document.querySelector("#logoutButton");
+    const guestPanel = document.querySelector("#guestPanel");
+    const userPanel = document.querySelector("#userPanel");
+    const currentUserEl = document.querySelector("#currentUser");
+    const myBestEl = document.querySelector("#myBest");
+    const authStatus = document.querySelector("#authStatus");
+    const leaderboardList = document.querySelector("#leaderboardList");
+    const leaderboardStatus = document.querySelector("#leaderboardStatus");
+
+    const state = {
+      running: false,
+      paused: false,
+      user: null,
+      score: 0,
+      best: Number(localStorage.getItem("starCourierBest") || 0),
+      lives: 3,
+      combo: 0,
+      level: 1,
+      shieldTime: 0,
+      slowTime: 0,
+      levelFlash: 0,
+      hudTimer: 0,
+      time: 0,
+      lastFrame: 0,
+      spawnTimer: 0,
+      difficulty: 1,
+      keys: new Set(),
+      player: { x: 0, y: 0, width: 82, height: 56, speed: 680 },
+      drops: [],
+      bursts: [],
+      stars: []
+    };
+
+    bestEl.textContent = state.best;
+    usernameEl.value = localStorage.getItem("starCourierUsername") || "";
+
+    function resize() {
+      const rect = canvas.parentElement.getBoundingClientRect();
+      const scale = window.devicePixelRatio || 1;
+      canvas.width = Math.floor(rect.width * scale);
+      canvas.height = Math.floor(rect.height * scale);
+      ctx.setTransform(scale, 0, 0, scale, 0, 0);
+      canvas.logicalWidth = rect.width;
+      canvas.logicalHeight = rect.height;
+      state.player.y = rect.height - 84;
+      state.player.x = Math.min(Math.max(state.player.x || rect.width / 2, 52), rect.width - 52);
+      makeBackdropStars();
+    }
+
+    function makeBackdropStars() {
+      state.stars = Array.from({ length: 58 }, () => ({
+        x: Math.random() * canvas.logicalWidth,
+        y: Math.random() * canvas.logicalHeight,
+        r: Math.random() * 1.8 + 0.8,
+        twinkle: Math.random() * Math.PI * 2
+      }));
+    }
+
+    function startGame() {
+      if (!state.user) {
+        authStatus.textContent = "请先登录或注册，再开始保存成绩。";
+        return;
+      }
+      Object.assign(state, {
+        running: true,
+        paused: false,
+        score: 0,
+        lives: 3,
+        combo: 0,
+        level: 1,
+        shieldTime: 0,
+        slowTime: 0,
+        levelFlash: 0,
+        hudTimer: 0,
+        time: 0,
+        lastFrame: performance.now(),
+        spawnTimer: 0,
+        difficulty: 1,
+        drops: [],
+        bursts: []
+      });
+      state.player.x = canvas.logicalWidth / 2;
+      overlay.classList.remove("show");
+      updateHud();
+      requestAnimationFrame(loop);
+    }
+
+    function updateHud() {
+      scoreEl.textContent = state.score;
+      bestEl.textContent = state.best;
+      livesEl.textContent = state.lives;
+      comboEl.textContent = state.combo;
+      levelEl.textContent = state.level;
+      powerEl.textContent = getPowerLabel();
+    }
+
+    function getPowerLabel() {
+      if (state.shieldTime > 0 && state.slowTime > 0) return "双加成";
+      if (state.shieldTime > 0) return `护盾${Math.ceil(state.shieldTime)}`;
+      if (state.slowTime > 0) return `慢速${Math.ceil(state.slowTime)}`;
+      return "普通";
+    }
+
+    function checkLevelUp() {
+      const nextLevel = Math.floor(state.score / 160) + 1;
+      if (nextLevel > state.level) {
+        state.level = nextLevel;
+        state.levelFlash = 1.4;
+        burst(state.player.x, state.player.y - 24, "#fff2d7", 28);
+      }
+    }
+
+    function togglePause() {
+      if (!state.running) return;
+      state.paused = !state.paused;
+      if (state.paused) {
+        showOverlay("暂停中", "按空格或点按钮继续，星星会等你一下。", "继续游戏");
+      } else {
+        overlay.classList.remove("show");
+        state.lastFrame = performance.now();
+        requestAnimationFrame(loop);
+      }
+    }
+
+    function showOverlay(title, text, buttonText) {
+      overlayTitle.textContent = title;
+      overlayText.textContent = text;
+      startButton.textContent = buttonText;
+      overlay.classList.add("show");
+    }
+
+    function spawnDrop() {
+      const roll = Math.random();
+      const type = roll < 0.055 ? "shield" :
+        roll < 0.115 ? "slow" :
+          roll < Math.min(0.39 + state.difficulty * 0.035, 0.6) ? "meteor" : "star";
+      const size = type === "meteor" ? random(38, 58) : random(28, 42);
+      state.drops.push({
+        x: random(size, canvas.logicalWidth - size),
+        y: -size,
+        size,
+        vy: random(150, 260) + state.difficulty * 42,
+        vx: random(-32, 32),
+        spin: random(-3, 3),
+        rotation: random(0, Math.PI * 2),
+        type,
+        caught: false
+      });
+    }
+
+    function loop(now) {
+      if (!state.running || state.paused) return;
+      const dt = Math.min((now - state.lastFrame) / 1000, 0.033);
+      state.lastFrame = now;
+      update(dt);
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    function update(dt) {
+      state.time += dt;
+      state.shieldTime = Math.max(0, state.shieldTime - dt);
+      state.slowTime = Math.max(0, state.slowTime - dt);
+      state.levelFlash = Math.max(0, state.levelFlash - dt);
+      state.hudTimer -= dt;
+      state.difficulty = 1 + state.time / 28 + (state.level - 1) * 0.28;
+      state.spawnTimer -= dt;
+
+      if (state.spawnTimer <= 0) {
+        spawnDrop();
+        state.spawnTimer = Math.max(0.34, 0.92 - state.difficulty * 0.08) * random(0.72, 1.12);
+      }
+
+      const direction = (state.keys.has("arrowright") || state.keys.has("d") ? 1 : 0) -
+        (state.keys.has("arrowleft") || state.keys.has("a") ? 1 : 0);
+      state.player.x += direction * state.player.speed * dt;
+      state.player.x = clamp(state.player.x, state.player.width / 2, canvas.logicalWidth - state.player.width / 2);
+
+      const fallDt = state.slowTime > 0 ? dt * 0.55 : dt;
+      for (const drop of state.drops) {
+        drop.y += drop.vy * fallDt;
+        drop.x += drop.vx * fallDt;
+        drop.rotation += drop.spin * fallDt;
+
+        if (hitsPlayer(drop)) {
+          drop.caught = true;
+          if (drop.type === "star") {
+            state.combo += 1;
+            state.score += 10 + Math.min(state.combo * 2, 40);
+            burst(drop.x, drop.y, "#ffdf66", 12);
+            checkLevelUp();
+          } else if (drop.type === "shield") {
+            state.shieldTime = 7;
+            state.combo += 1;
+            state.score += 15;
+            burst(drop.x, drop.y, "#79c7ff", 18);
+            checkLevelUp();
+          } else if (drop.type === "slow") {
+            state.slowTime = 5;
+            state.combo += 1;
+            state.score += 15;
+            burst(drop.x, drop.y, "#7adfc4", 18);
+            checkLevelUp();
+          } else if (state.shieldTime > 0) {
+            state.shieldTime = 0;
+            state.combo = 0;
+            burst(drop.x, drop.y, "#79c7ff", 24);
+            shake();
+          } else {
+            state.lives -= 1;
+            state.combo = 0;
+            burst(drop.x, drop.y, "#ff6f61", 16);
+            shake();
+            if (state.lives <= 0) {
+              endGame();
+              return;
+            }
+          }
+          updateHud();
+        }
+
+        if (!drop.caught && drop.type !== "meteor" && drop.y > canvas.logicalHeight + drop.size) {
+          drop.caught = true;
+          state.combo = 0;
+          updateHud();
+        }
+      }
+
+      state.drops = state.drops.filter(drop => !drop.caught && drop.y < canvas.logicalHeight + 90);
+
+      for (const part of state.bursts) {
+        part.life -= dt;
+        part.x += part.vx * dt;
+        part.y += part.vy * dt;
+        part.vy += 360 * dt;
+      }
+      state.bursts = state.bursts.filter(part => part.life > 0);
+
+      if (state.hudTimer <= 0) {
+        state.hudTimer = 0.2;
+        updateHud();
+      }
+    }
+
+    function draw() {
+      const width = canvas.logicalWidth;
+      const height = canvas.logicalHeight;
+      ctx.clearRect(0, 0, width, height);
+      drawBackdrop(width, height);
+
+      for (const drop of state.drops) {
+        if (drop.type === "star") drawStar(drop);
+        else if (drop.type === "meteor") drawMeteor(drop);
+        else drawPowerUp(drop);
+      }
+
+      drawPlayer();
+      drawBursts();
+      drawStatusText(width);
+    }
+
+    function drawBackdrop(width, height) {
+      const grd = ctx.createLinearGradient(0, 0, 0, height);
+      grd.addColorStop(0, "#22395e");
+      grd.addColorStop(0.56, "#356b8e");
+      grd.addColorStop(1, "#65b7a7");
+      ctx.fillStyle = grd;
+      ctx.fillRect(0, 0, width, height);
+
+      ctx.save();
+      for (const star of state.stars) {
+        const pulse = Math.sin(state.time * 2.2 + star.twinkle) * 0.45 + 0.65;
+        ctx.globalAlpha = pulse;
+        ctx.fillStyle = "#fff8d4";
+        ctx.beginPath();
+        ctx.arc(star.x, star.y, star.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+
+      ctx.fillStyle = "rgba(255, 242, 215, 0.2)";
+      for (let i = 0; i < 4; i += 1) {
+        const x = (i * 240 + state.time * 18) % (width + 260) - 130;
+        drawCloud(x, 70 + i * 88, 0.7 + i * 0.08);
+      }
+    }
+
+    function drawCloud(x, y, scale) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.scale(scale, scale);
+      ctx.beginPath();
+      ctx.arc(0, 16, 28, Math.PI, 0);
+      ctx.arc(34, 8, 36, Math.PI, 0);
+      ctx.arc(78, 18, 30, Math.PI, 0);
+      ctx.rect(-28, 16, 136, 28);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawPlayer() {
+      const p = state.player;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+
+      if (state.shieldTime > 0) {
+        ctx.strokeStyle = `rgba(121, 199, 255, ${0.56 + Math.sin(state.time * 8) * 0.18})`;
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.ellipse(0, 4, 64, 46, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = "rgba(21, 35, 60, 0.22)";
+      ctx.beginPath();
+      ctx.ellipse(0, 45, 48, 10, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "#ffbf47";
+      ctx.beginPath();
+      ctx.moveTo(-42, 14);
+      ctx.quadraticCurveTo(0, -34, 42, 14);
+      ctx.quadraticCurveTo(18, 34, -42, 14);
+      ctx.fill();
+
+      ctx.fillStyle = "#fff2d7";
+      ctx.beginPath();
+      ctx.ellipse(0, 4, 21, 15, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "#ff6f61";
+      ctx.beginPath();
+      ctx.moveTo(-26, 20);
+      ctx.lineTo(-50, 34);
+      ctx.lineTo(-22, 31);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(26, 20);
+      ctx.lineTo(50, 34);
+      ctx.lineTo(22, 31);
+      ctx.fill();
+
+      ctx.fillStyle = "#7adfc4";
+      ctx.beginPath();
+      ctx.arc(0, 4, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawPowerUp(drop) {
+      ctx.save();
+      ctx.translate(drop.x, drop.y);
+      ctx.rotate(drop.rotation);
+
+      if (drop.type === "shield") {
+        ctx.fillStyle = "#79c7ff";
+        ctx.strokeStyle = "#fff2d7";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(0, -drop.size * 0.55);
+        ctx.quadraticCurveTo(drop.size * 0.48, -drop.size * 0.32, drop.size * 0.38, drop.size * 0.18);
+        ctx.quadraticCurveTo(drop.size * 0.22, drop.size * 0.52, 0, drop.size * 0.66);
+        ctx.quadraticCurveTo(-drop.size * 0.22, drop.size * 0.52, -drop.size * 0.38, drop.size * 0.18);
+        ctx.quadraticCurveTo(-drop.size * 0.48, -drop.size * 0.32, 0, -drop.size * 0.55);
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = "#7adfc4";
+        ctx.strokeStyle = "#fff2d7";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, drop.size * 0.48, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.strokeStyle = "#23395d";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(0, -drop.size * 0.27);
+        ctx.moveTo(0, 0);
+        ctx.lineTo(drop.size * 0.22, drop.size * 0.16);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    function drawStar(drop) {
+      ctx.save();
+      ctx.translate(drop.x, drop.y);
+      ctx.rotate(drop.rotation);
+      ctx.fillStyle = "#ffdf66";
+      ctx.strokeStyle = "#fff2d7";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      for (let i = 0; i < 10; i += 1) {
+        const radius = i % 2 === 0 ? drop.size * 0.48 : drop.size * 0.21;
+        const angle = -Math.PI / 2 + i * Math.PI / 5;
+        ctx.lineTo(Math.cos(angle) * radius, Math.sin(angle) * radius);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawMeteor(drop) {
+      ctx.save();
+      ctx.translate(drop.x, drop.y);
+      ctx.rotate(drop.rotation);
+
+      ctx.fillStyle = "rgba(255, 111, 97, 0.38)";
+      ctx.beginPath();
+      ctx.moveTo(-drop.size * 1.2, -drop.size * 0.2);
+      ctx.lineTo(-drop.size * 2.1, -drop.size * 0.62);
+      ctx.lineTo(-drop.size * 0.58, drop.size * 0.44);
+      ctx.fill();
+
+      ctx.fillStyle = "#4b3b46";
+      ctx.beginPath();
+      ctx.arc(0, 0, drop.size * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "#ff8d84";
+      ctx.beginPath();
+      ctx.arc(-drop.size * 0.1, -drop.size * 0.12, drop.size * 0.12, 0, Math.PI * 2);
+      ctx.arc(drop.size * 0.18, drop.size * 0.08, drop.size * 0.08, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawBursts() {
+      ctx.save();
+      for (const part of state.bursts) {
+        ctx.globalAlpha = Math.max(part.life / part.maxLife, 0);
+        ctx.fillStyle = part.color;
+        ctx.beginPath();
+        ctx.arc(part.x, part.y, part.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    function drawStatusText(width) {
+      if (state.levelFlash <= 0 && state.slowTime <= 0) return;
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.font = "900 26px Trebuchet MS, Comic Sans MS, cursive";
+      ctx.lineWidth = 5;
+
+      if (state.levelFlash > 0) {
+        ctx.globalAlpha = Math.min(state.levelFlash, 1);
+        ctx.strokeStyle = "rgba(35, 57, 93, 0.72)";
+        ctx.fillStyle = "#fff2d7";
+        ctx.strokeText(`等级 ${state.level}!`, width / 2, 56);
+        ctx.fillText(`等级 ${state.level}!`, width / 2, 56);
+      } else if (state.slowTime > 0) {
+        ctx.globalAlpha = 0.78;
+        ctx.strokeStyle = "rgba(35, 57, 93, 0.58)";
+        ctx.fillStyle = "#7adfc4";
+        ctx.strokeText("时间变慢了", width / 2, 56);
+        ctx.fillText("时间变慢了", width / 2, 56);
+      }
+
+      ctx.restore();
+    }
+
+    function hitsPlayer(drop) {
+      const p = state.player;
+      const dx = Math.abs(drop.x - p.x);
+      const dy = Math.abs(drop.y - (p.y + 4));
+      return dx < p.width * 0.52 + drop.size * 0.34 && dy < p.height * 0.45 + drop.size * 0.34;
+    }
+
+    function burst(x, y, color, count) {
+      for (let i = 0; i < count; i += 1) {
+        const angle = random(0, Math.PI * 2);
+        const speed = random(80, 260);
+        const life = random(0.35, 0.72);
+        state.bursts.push({
+          x,
+          y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          size: random(3, 7),
+          color,
+          life,
+          maxLife: life
+        });
+      }
+    }
+
+    function shake() {
+      canvas.parentElement.animate([
+        { transform: "translateX(0)" },
+        { transform: "translateX(-9px)" },
+        { transform: "translateX(8px)" },
+        { transform: "translateX(0)" }
+      ], { duration: 180, easing: "ease-out" });
+    }
+
+    function endGame() {
+      state.running = false;
+      if (state.score > state.best) {
+        state.best = state.score;
+        localStorage.setItem("starCourierBest", state.best);
+      }
+      updateHud();
+      showOverlay("任务结束", `你送达了 ${state.score} 点星光。再来一局冲最高分！`, "重新开始");
+      submitScore();
+    }
+
+    async function submitScore() {
+      const payload = {
+        score: state.score,
+        level: state.level,
+        combo: state.combo
+      };
+
+      try {
+        leaderboardStatus.textContent = "正在保存分数...";
+        const response = await fetch("/api/scores", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (!response.ok) throw new Error("保存失败");
+        leaderboardStatus.textContent = "分数已保存到数据库";
+        await Promise.all([loadLeaderboard(), loadMyScores()]);
+      } catch (error) {
+        leaderboardStatus.textContent = state.user ? "保存失败，请检查后端服务" : "请登录后保存分数";
+      }
+    }
+
+    async function loadLeaderboard() {
+      try {
+        const response = await fetch("/api/scores?limit=8");
+        if (!response.ok) throw new Error("读取失败");
+        const data = await response.json();
+        renderLeaderboard(data.scores || []);
+        leaderboardStatus.textContent = "数据来自 SQLite 排行榜";
+      } catch (error) {
+        leaderboardList.innerHTML = "<li>暂无后端数据</li>";
+        leaderboardStatus.textContent = "运行 npm start 后启用数据库";
+      }
+    }
+
+    async function loadMe() {
+      try {
+        const response = await fetch("/api/auth/me");
+        if (!response.ok) throw new Error("读取登录状态失败");
+        const data = await response.json();
+        setUser(data.user || null);
+        if (state.user) await loadMyScores();
+      } catch (error) {
+        setUser(null);
+        authStatus.textContent = "后端未连接，账号功能暂不可用。";
+      }
+    }
+
+    async function loadMyScores() {
+      if (!state.user) return;
+      try {
+        const response = await fetch("/api/me/scores?limit=10");
+        if (!response.ok) throw new Error("读取个人分数失败");
+        const data = await response.json();
+        myBestEl.textContent = data.best ? `${data.best.score} 分 · 等级 ${data.best.level}` : "暂无";
+      } catch (error) {
+        myBestEl.textContent = "读取失败";
+      }
+    }
+
+    async function loginOrRegister(mode) {
+      const username = sanitizeUsernameInput();
+      const password = passwordEl.value;
+
+      if (!username || password.length < 6) {
+        authStatus.textContent = "请输入用户名，密码至少 6 位。";
+        return;
+      }
+
+      try {
+        authStatus.textContent = mode === "register" ? "正在注册..." : "正在登录...";
+        const response = await fetch(`/api/auth/${mode}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ username, password })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "操作失败");
+        passwordEl.value = "";
+        localStorage.setItem("starCourierUsername", username);
+        setUser(data.user);
+        authStatus.textContent = mode === "register" ? "注册成功，欢迎登船。" : "登录成功，欢迎回来。";
+        await loadMyScores();
+      } catch (error) {
+        authStatus.textContent = error.message;
+      }
+    }
+
+    async function logout() {
+      try {
+        await fetch("/api/auth/logout", { method: "POST" });
+      } catch (error) {
+        // Even if the network fails, clearing the local UI keeps the player unblocked.
+      }
+      setUser(null);
+      authStatus.textContent = "已退出登录。";
+    }
+
+    function setUser(user) {
+      state.user = user;
+      guestPanel.hidden = Boolean(user);
+      userPanel.hidden = !user;
+      currentUserEl.textContent = user ? user.username : "-";
+      myBestEl.textContent = user ? "读取中..." : "暂无";
+      startButton.textContent = user ? "开始游戏" : "登录后开始";
+    }
+
+    function renderLeaderboard(scores) {
+      if (!scores.length) {
+        leaderboardList.innerHTML = "<li>还没有记录，来拿第一名</li>";
+        return;
+      }
+
+      leaderboardList.innerHTML = scores.map(score => `
+        <li>
+          <span class="score-line">
+            <span>${escapeHtml(score.name)}</span>
+            <span>${score.score}</span>
+          </span>
+          <small>等级 ${score.level} · 连击 ${score.combo}</small>
+        </li>
+      `).join("");
+    }
+
+    function sanitizeUsernameInput() {
+      const username = (usernameEl.value || "").replace(/[^\w\u4e00-\u9fa5-]/g, "").trim().slice(0, 12);
+      usernameEl.value = username;
+      return username;
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, char => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        "\"": "&quot;",
+        "'": "&#39;"
+      }[char]));
+    }
+
+    function pointerMove(event) {
+      if (!state.running || state.paused) return;
+      event.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const pointer = event.touches ? event.touches[0] : event;
+      state.player.x = clamp(pointer.clientX - rect.left, state.player.width / 2, canvas.logicalWidth - state.player.width / 2);
+    }
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function random(min, max) {
+      return Math.random() * (max - min) + min;
+    }
+
+    function isTyping(event) {
+      return ["INPUT", "TEXTAREA", "SELECT"].includes(event.target.tagName);
+    }
+
+    window.addEventListener("resize", resize);
+    window.addEventListener("keydown", event => {
+      if (isTyping(event)) return;
+      const key = event.key.toLowerCase();
+      if (["arrowleft", "arrowright", "a", "d", " "].includes(key)) event.preventDefault();
+      if (key === " ") togglePause();
+      state.keys.add(key);
+    });
+    window.addEventListener("keyup", event => {
+      if (isTyping(event)) return;
+      state.keys.delete(event.key.toLowerCase());
+    });
+    canvas.addEventListener("pointermove", pointerMove);
+    canvas.addEventListener("pointerdown", pointerMove);
+    canvas.addEventListener("touchmove", pointerMove, { passive: false });
+    usernameEl.addEventListener("change", sanitizeUsernameInput);
+    loginButton.addEventListener("click", () => loginOrRegister("login"));
+    registerButton.addEventListener("click", () => loginOrRegister("register"));
+    logoutButton.addEventListener("click", logout);
+    passwordEl.addEventListener("keydown", event => {
+      if (event.key === "Enter") loginOrRegister("login");
+    });
+    startButton.addEventListener("click", () => {
+      if (state.paused) {
+        togglePause();
+      } else {
+        startGame();
+      }
+    });
+
+    resize();
+    draw();
+    loadLeaderboard();
+    loadMe();
+  </script>
+</body>
+</html>
