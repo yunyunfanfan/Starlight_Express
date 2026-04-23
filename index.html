@@ -414,7 +414,7 @@
       <div class="overlay show" id="overlay">
         <div class="modal">
           <h2 id="overlayTitle">准备出发</h2>
-          <p id="overlayText">接住星星，躲开陨石。蓝色护盾能挡一次撞击，绿色时钟会让陨石变慢。</p>
+          <p id="overlayText">接住星星和道具，躲开陨石。等级提升后会出现分裂、追踪和伪装星星障碍。</p>
           <div class="auth-card">
             <div id="guestPanel">
               <div class="auth-row">
@@ -609,13 +609,8 @@
 
     function spawnDrop() {
       const roll = Math.random();
-      const type = roll < 0.018 ? "rainbow" :
-        roll < 0.06 ? "magnet" :
-          roll < 0.105 ? "double" :
-            roll < 0.16 ? "shield" :
-              roll < 0.22 ? "slow" :
-                roll < Math.min(0.48 + state.difficulty * 0.035, 0.68) ? "meteor" : "star";
-      const size = type === "meteor" ? random(38, 58) : random(28, 42);
+      const type = chooseDropType(roll);
+      const size = getDropSize(type);
       state.drops.push({
         x: random(size, canvas.logicalWidth - size),
         y: -size,
@@ -625,8 +620,36 @@
         spin: random(-3, 3),
         rotation: random(0, Math.PI * 2),
         type,
+        splitAt: type === "splitMeteor" ? random(canvas.logicalHeight * 0.32, canvas.logicalHeight * 0.68) : 0,
+        splitDone: false,
         caught: false
       });
+    }
+
+    function chooseDropType(roll) {
+      if (roll < 0.018) return "rainbow";
+      if (roll < 0.06) return "magnet";
+      if (roll < 0.105) return "double";
+      if (roll < 0.16) return "shield";
+      if (roll < 0.22) return "slow";
+
+      const hazardRoll = roll - 0.22;
+      const hazardChance = Math.min(0.28 + state.difficulty * 0.035, 0.46);
+      if (hazardRoll > hazardChance) return "star";
+
+      const unlockedHazards = ["meteor"];
+      if (state.level >= 2) unlockedHazards.push("fakeStar");
+      if (state.level >= 3) unlockedHazards.push("splitMeteor");
+      if (state.level >= 4) unlockedHazards.push("trackingMeteor");
+      return unlockedHazards[Math.floor(Math.random() * unlockedHazards.length)];
+    }
+
+    function getDropSize(type) {
+      if (type === "meteor") return random(38, 58);
+      if (type === "splitMeteor") return random(46, 62);
+      if (type === "trackingMeteor") return random(36, 52);
+      if (type === "fakeStar") return random(30, 44);
+      return random(28, 42);
     }
 
     function loop(now) {
@@ -666,9 +689,18 @@
           pullStarTowardPlayer(drop, dt);
         }
 
+        if (drop.type === "trackingMeteor") {
+          trackPlayer(drop, dt);
+        }
+
         drop.y += drop.vy * fallDt;
         drop.x += drop.vx * fallDt;
         drop.rotation += drop.spin * fallDt;
+        drop.x = clamp(drop.x, drop.size * 0.5, canvas.logicalWidth - drop.size * 0.5);
+
+        if (drop.type === "splitMeteor" && !drop.splitDone && drop.y >= drop.splitAt) {
+          splitMeteor(drop);
+        }
 
         if (hitsPlayer(drop)) {
           drop.caught = true;
@@ -705,17 +737,8 @@
             state.rainbowFlash = 1.6;
             rainbowBurst(drop.x, drop.y);
             checkLevelUp();
-          } else if (state.shieldTime > 0) {
-            state.shieldTime = 0;
-            state.combo = 0;
-            burst(drop.x, drop.y, "#79c7ff", 24);
-            shake();
           } else {
-            state.lives -= 1;
-            state.combo = 0;
-            burst(drop.x, drop.y, "#ff6f61", 16);
-            shake();
-            if (state.lives <= 0) {
+            if (takeDamage(drop)) {
               endGame();
               return;
             }
@@ -723,7 +746,7 @@
           updateHud();
         }
 
-        if (!drop.caught && drop.type !== "meteor" && drop.y > canvas.logicalHeight + drop.size) {
+        if (!drop.caught && !isHazard(drop) && drop.y > canvas.logicalHeight + drop.size) {
           drop.caught = true;
           state.combo = 0;
           updateHud();
@@ -754,7 +777,7 @@
 
       for (const drop of state.drops) {
         if (drop.type === "star") drawStar(drop);
-        else if (drop.type === "meteor") drawMeteor(drop);
+        else if (isHazard(drop)) drawHazard(drop);
         else drawPowerUp(drop);
       }
 
@@ -785,6 +808,55 @@
       const baseScore = 10 + Math.min(state.combo * 2, 40);
       state.score += state.doubleTime > 0 ? baseScore * 2 : baseScore;
       checkLevelUp();
+    }
+
+    function isHazard(drop) {
+      return ["meteor", "splitMeteor", "miniMeteor", "trackingMeteor", "fakeStar"].includes(drop.type);
+    }
+
+    function takeDamage(drop) {
+      const shielded = state.shieldTime > 0;
+      if (shielded) {
+        state.shieldTime = 0;
+        burst(drop.x, drop.y, "#79c7ff", 24);
+      } else {
+        state.lives -= 1;
+        burst(drop.x, drop.y, getHazardColor(drop), 18);
+      }
+
+      state.combo = 0;
+      shake();
+      return state.lives <= 0;
+    }
+
+    function trackPlayer(drop, dt) {
+      const target = state.player.x - drop.x;
+      const steer = clamp(target * 0.9, -150, 150);
+      drop.vx += steer * dt;
+      drop.vx = clamp(drop.vx, -125, 125);
+    }
+
+    function splitMeteor(drop) {
+      drop.splitDone = true;
+      drop.caught = true;
+      burst(drop.x, drop.y, "#ff9a4d", 14);
+
+      for (const direction of [-1, 1]) {
+        const size = drop.size * 0.56;
+        state.drops.push({
+          x: clamp(drop.x + direction * size * 0.8, size, canvas.logicalWidth - size),
+          y: drop.y,
+          size,
+          vy: drop.vy * random(0.92, 1.08),
+          vx: direction * random(85, 135),
+          spin: random(-5, 5),
+          rotation: random(0, Math.PI * 2),
+          type: "miniMeteor",
+          splitAt: 0,
+          splitDone: true,
+          caught: false
+        });
+      }
     }
 
     function drawBackdrop(width, height) {
@@ -1017,29 +1089,94 @@
       ctx.restore();
     }
 
+    function drawHazard(drop) {
+      if (drop.type === "fakeStar") {
+        drawFakeStar(drop);
+        return;
+      }
+
+      drawMeteor(drop);
+    }
+
     function drawMeteor(drop) {
       ctx.save();
       ctx.translate(drop.x, drop.y);
       ctx.rotate(drop.rotation);
 
-      ctx.fillStyle = "rgba(255, 111, 97, 0.38)";
+      const color = getHazardColor(drop);
+      ctx.fillStyle = drop.type === "trackingMeteor" ? "rgba(255, 47, 84, 0.34)" : "rgba(255, 111, 97, 0.38)";
       ctx.beginPath();
       ctx.moveTo(-drop.size * 1.2, -drop.size * 0.2);
       ctx.lineTo(-drop.size * 2.1, -drop.size * 0.62);
       ctx.lineTo(-drop.size * 0.58, drop.size * 0.44);
       ctx.fill();
 
-      ctx.fillStyle = "#4b3b46";
+      ctx.fillStyle = color;
       ctx.beginPath();
       ctx.arc(0, 0, drop.size * 0.5, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.fillStyle = "#ff8d84";
+      if (drop.type === "splitMeteor") {
+        ctx.strokeStyle = "#ffdf66";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(-drop.size * 0.2, -drop.size * 0.36);
+        ctx.lineTo(drop.size * 0.05, -drop.size * 0.04);
+        ctx.lineTo(-drop.size * 0.12, drop.size * 0.34);
+        ctx.stroke();
+      } else if (drop.type === "trackingMeteor") {
+        ctx.strokeStyle = "#fff2d7";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(-drop.size * 0.16, -drop.size * 0.08);
+        ctx.lineTo(-drop.size * 0.02, drop.size * 0.08);
+        ctx.lineTo(drop.size * 0.24, -drop.size * 0.12);
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = drop.type === "trackingMeteor" ? "#fff2d7" : "#ff8d84";
       ctx.beginPath();
       ctx.arc(-drop.size * 0.1, -drop.size * 0.12, drop.size * 0.12, 0, Math.PI * 2);
       ctx.arc(drop.size * 0.18, drop.size * 0.08, drop.size * 0.08, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
+    }
+
+    function drawFakeStar(drop) {
+      ctx.save();
+      ctx.translate(drop.x, drop.y);
+      ctx.rotate(drop.rotation);
+      ctx.fillStyle = "#ffd84f";
+      ctx.strokeStyle = "#ff5f6d";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      for (let i = 0; i < 10; i += 1) {
+        const radius = i % 2 === 0 ? drop.size * 0.5 : drop.size * 0.2;
+        const angle = -Math.PI / 2 + i * Math.PI / 5;
+        ctx.lineTo(Math.cos(angle) * radius, Math.sin(angle) * radius);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.strokeStyle = "#7a2638";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(-drop.size * 0.18, -drop.size * 0.18);
+      ctx.lineTo(drop.size * 0.05, drop.size * 0.02);
+      ctx.lineTo(-drop.size * 0.06, drop.size * 0.26);
+      ctx.moveTo(drop.size * 0.2, -drop.size * 0.08);
+      ctx.lineTo(drop.size * 0.02, drop.size * 0.16);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function getHazardColor(drop) {
+      if (drop.type === "splitMeteor") return "#7a4b2a";
+      if (drop.type === "miniMeteor") return "#9b5d35";
+      if (drop.type === "trackingMeteor") return "#a32642";
+      if (drop.type === "fakeStar") return "#ff5f6d";
+      return "#4b3b46";
     }
 
     function drawBursts() {
