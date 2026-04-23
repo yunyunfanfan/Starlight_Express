@@ -497,6 +497,7 @@
       lastFrame: 0,
       spawnTimer: 0,
       difficulty: 1,
+      boss: makeBossState(),
       keys: new Set(),
       player: { x: 0, y: 0, width: 82, height: 56, speed: 680 },
       drops: [],
@@ -506,6 +507,25 @@
 
     bestEl.textContent = state.best;
     usernameEl.value = localStorage.getItem("starCourierUsername") || "";
+
+    function makeBossState() {
+      return {
+        active: false,
+        level: 0,
+        timeLeft: 0,
+        duration: 0,
+        targetStars: 0,
+        starsCollected: 0,
+        attackTimer: 0,
+        attackMode: "bullets",
+        message: "",
+        messageTime: 0,
+        clearedLevels: new Set(),
+        x: 0,
+        y: 0,
+        phase: 1
+      };
+    }
 
     function resize() {
       const rect = canvas.parentElement.getBoundingClientRect();
@@ -552,6 +572,7 @@
         lastFrame: performance.now(),
         spawnTimer: 0,
         difficulty: 1,
+        boss: makeBossState(),
         drops: [],
         bursts: []
       });
@@ -582,10 +603,56 @@
     function checkLevelUp() {
       const nextLevel = Math.floor(state.score / 160) + 1;
       if (nextLevel > state.level) {
+        const previousLevel = state.level;
         state.level = nextLevel;
         state.levelFlash = 1.4;
         burst(state.player.x, state.player.y - 24, "#fff2d7", 28);
+        const bossLevel = getCrossedBossLevel(previousLevel, nextLevel);
+        if (bossLevel) {
+          enterBoss(bossLevel);
+        }
       }
+    }
+
+    function getCrossedBossLevel(previousLevel, nextLevel) {
+      if (state.boss.active) return 0;
+      for (let level = previousLevel + 1; level <= nextLevel; level += 1) {
+        if (level > 1 && level % 5 === 0 && !state.boss.clearedLevels.has(level)) {
+          return level;
+        }
+      }
+      return 0;
+    }
+
+    function enterBoss(level) {
+      state.boss.active = true;
+      state.boss.level = level;
+      state.boss.duration = 28 + Math.min(level, 20);
+      state.boss.timeLeft = state.boss.duration;
+      state.boss.targetStars = 10 + Math.floor(level / 5) * 3;
+      state.boss.starsCollected = 0;
+      state.boss.attackTimer = 1.4;
+      state.boss.attackMode = "bullets";
+      state.boss.message = `Boss 关 ${level}`;
+      state.boss.messageTime = 2.2;
+      state.boss.x = canvas.logicalWidth / 2;
+      state.boss.y = 92;
+      state.boss.phase = 1;
+      state.drops = state.drops.filter(drop => drop.type === "star" || !isHazard(drop));
+      burst(state.boss.x, state.boss.y, "#c083ff", 36);
+    }
+
+    function clearBoss() {
+      state.boss.clearedLevels.add(state.boss.level);
+      state.boss.active = false;
+      state.boss.message = "Boss 关通过!";
+      state.boss.messageTime = 2.4;
+      state.score += 220 + state.boss.level * 18;
+      state.combo += 5;
+      state.drops = state.drops.filter(drop => !isBossAttack(drop));
+      rainbowBurst(state.player.x, state.player.y - 36);
+      checkLevelUp();
+      updateHud();
     }
 
     function togglePause() {
@@ -627,6 +694,13 @@
     }
 
     function chooseDropType(roll) {
+      if (state.boss.active) {
+        if (roll < 0.7) return "star";
+        if (roll < 0.82) return "shield";
+        if (roll < 0.92) return "slow";
+        return "meteor";
+      }
+
       if (roll < 0.018) return "rainbow";
       if (roll < 0.06) return "magnet";
       if (roll < 0.105) return "double";
@@ -669,13 +743,19 @@
       state.doubleTime = Math.max(0, state.doubleTime - dt);
       state.rainbowFlash = Math.max(0, state.rainbowFlash - dt);
       state.levelFlash = Math.max(0, state.levelFlash - dt);
+      state.boss.messageTime = Math.max(0, state.boss.messageTime - dt);
       state.hudTimer -= dt;
       state.difficulty = 1 + state.time / 28 + (state.level - 1) * 0.28;
       state.spawnTimer -= dt;
 
+      if (state.boss.active) {
+        updateBoss(dt);
+      }
+
       if (state.spawnTimer <= 0) {
         spawnDrop();
-        state.spawnTimer = Math.max(0.34, 0.92 - state.difficulty * 0.08) * random(0.72, 1.12);
+        const baseSpawnDelay = state.boss.active ? 1.18 : Math.max(0.34, 0.92 - state.difficulty * 0.08);
+        state.spawnTimer = baseSpawnDelay * random(0.72, 1.12);
       }
 
       const direction = (state.keys.has("arrowright") || state.keys.has("d") ? 1 : 0) -
@@ -687,6 +767,10 @@
       for (const drop of state.drops) {
         if (state.magnetTime > 0 && drop.type === "star") {
           pullStarTowardPlayer(drop, dt);
+        }
+
+        if (drop.type === "bossBullet") {
+          drop.x += Math.sin(state.time * 5 + drop.wave) * drop.sway * dt;
         }
 
         if (drop.type === "trackingMeteor") {
@@ -706,6 +790,12 @@
           drop.caught = true;
           if (drop.type === "star") {
             collectStar(drop);
+            if (state.boss.active) {
+              state.boss.starsCollected += 1;
+              if (state.boss.starsCollected >= state.boss.targetStars) {
+                clearBoss();
+              }
+            }
             burst(drop.x, drop.y, "#ffdf66", 12);
           } else if (drop.type === "shield") {
             state.shieldTime = 7;
@@ -781,8 +871,13 @@
         else drawPowerUp(drop);
       }
 
+      if (state.boss.active) {
+        drawBoss(width);
+      }
+
       drawPlayer();
       drawBursts();
+      drawBossHud(width);
       drawStatusText(width);
     }
 
@@ -810,8 +905,83 @@
       checkLevelUp();
     }
 
+    function updateBoss(dt) {
+      const boss = state.boss;
+      boss.timeLeft = Math.max(0, boss.timeLeft - dt);
+      boss.phase = boss.timeLeft < boss.duration * 0.45 ? 2 : 1;
+      boss.x = canvas.logicalWidth / 2 + Math.sin(state.time * (boss.phase === 2 ? 1.7 : 1.1)) * Math.min(150, canvas.logicalWidth * 0.22);
+      boss.attackTimer -= dt;
+
+      if (boss.attackTimer <= 0) {
+        if (boss.attackMode === "bullets") {
+          fireBossBullets();
+          boss.attackMode = "meteorRain";
+          boss.attackTimer = boss.phase === 2 ? 1.6 : 2.2;
+        } else {
+          summonMeteorRain();
+          boss.attackMode = "bullets";
+          boss.attackTimer = boss.phase === 2 ? 1.2 : 1.8;
+        }
+      }
+
+      if (boss.timeLeft <= 0) {
+        clearBoss();
+      }
+    }
+
+    function fireBossBullets() {
+      const count = state.boss.phase === 2 ? 7 : 5;
+      const spread = state.boss.phase === 2 ? 220 : 160;
+      for (let i = 0; i < count; i += 1) {
+        const offset = count === 1 ? 0 : (i / (count - 1) - 0.5) * spread;
+        state.drops.push({
+          x: clamp(state.boss.x + offset * 0.22, 20, canvas.logicalWidth - 20),
+          y: state.boss.y + 58,
+          size: 22,
+          vy: random(230, 320) + state.level * 10,
+          vx: offset * 0.32,
+          spin: random(-5, 5),
+          rotation: random(0, Math.PI * 2),
+          type: "bossBullet",
+          wave: random(0, Math.PI * 2),
+          sway: random(18, 42),
+          splitAt: 0,
+          splitDone: true,
+          caught: false
+        });
+      }
+      state.boss.message = state.boss.phase === 2 ? "Boss 狂暴弹幕!" : "Boss 弹幕!";
+      state.boss.messageTime = 1;
+    }
+
+    function summonMeteorRain() {
+      const count = state.boss.phase === 2 ? 6 : 4;
+      for (let i = 0; i < count; i += 1) {
+        const size = random(28, 46);
+        state.drops.push({
+          x: random(size, canvas.logicalWidth - size),
+          y: -size - i * 24,
+          size,
+          vy: random(270, 390) + state.level * 12,
+          vx: random(-42, 42),
+          spin: random(-4, 4),
+          rotation: random(0, Math.PI * 2),
+          type: i % 3 === 0 && state.boss.phase === 2 ? "trackingMeteor" : "meteor",
+          splitAt: 0,
+          splitDone: true,
+          caught: false
+        });
+      }
+      state.boss.message = "陨石雨来袭!";
+      state.boss.messageTime = 1;
+    }
+
     function isHazard(drop) {
-      return ["meteor", "splitMeteor", "miniMeteor", "trackingMeteor", "fakeStar"].includes(drop.type);
+      return ["meteor", "splitMeteor", "miniMeteor", "trackingMeteor", "fakeStar", "bossBullet"].includes(drop.type);
+    }
+
+    function isBossAttack(drop) {
+      return drop.type === "bossBullet" || drop.type === "meteor" || drop.type === "trackingMeteor";
     }
 
     function takeDamage(drop) {
@@ -1095,6 +1265,11 @@
         return;
       }
 
+      if (drop.type === "bossBullet") {
+        drawBossBullet(drop);
+        return;
+      }
+
       drawMeteor(drop);
     }
 
@@ -1171,12 +1346,128 @@
       ctx.restore();
     }
 
+    function drawBossBullet(drop) {
+      ctx.save();
+      ctx.translate(drop.x, drop.y);
+      ctx.rotate(drop.rotation);
+
+      ctx.fillStyle = "#c083ff";
+      ctx.strokeStyle = "#fff2d7";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(0, -drop.size * 0.62);
+      ctx.quadraticCurveTo(drop.size * 0.48, 0, 0, drop.size * 0.62);
+      ctx.quadraticCurveTo(-drop.size * 0.48, 0, 0, -drop.size * 0.62);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = "#ffdf66";
+      ctx.beginPath();
+      ctx.arc(0, 0, drop.size * 0.18, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
     function getHazardColor(drop) {
+      if (drop.type === "bossBullet") return "#c083ff";
       if (drop.type === "splitMeteor") return "#7a4b2a";
       if (drop.type === "miniMeteor") return "#9b5d35";
       if (drop.type === "trackingMeteor") return "#a32642";
       if (drop.type === "fakeStar") return "#ff5f6d";
       return "#4b3b46";
+    }
+
+    function drawBoss(width) {
+      const boss = state.boss;
+      ctx.save();
+      ctx.translate(boss.x, boss.y);
+
+      const pulse = Math.sin(state.time * 4) * 0.06 + 1;
+      ctx.scale(pulse, pulse);
+
+      ctx.fillStyle = "rgba(21, 35, 60, 0.26)";
+      ctx.beginPath();
+      ctx.ellipse(0, 44, 94, 16, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      const grd = ctx.createRadialGradient(-26, -22, 12, 0, 0, 82);
+      grd.addColorStop(0, boss.phase === 2 ? "#ffdf66" : "#fff2d7");
+      grd.addColorStop(0.38, boss.phase === 2 ? "#ff5f6d" : "#c083ff");
+      grd.addColorStop(1, "#23395d");
+      ctx.fillStyle = grd;
+      ctx.strokeStyle = boss.phase === 2 ? "#ff5f6d" : "#79c7ff";
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.arc(0, 0, 66, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.strokeStyle = "rgba(255, 242, 215, 0.72)";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 92, 24, Math.sin(state.time) * 0.14, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = "#fff2d7";
+      ctx.beginPath();
+      ctx.arc(-22, -8, 8, 0, Math.PI * 2);
+      ctx.arc(22, -8, 8, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "#23395d";
+      ctx.beginPath();
+      ctx.arc(-22, -8, 3, 0, Math.PI * 2);
+      ctx.arc(22, -8, 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    function drawBossHud(width) {
+      if (!state.boss.active && state.boss.messageTime <= 0) return;
+
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.font = "900 20px Trebuchet MS, Comic Sans MS, cursive";
+
+      if (state.boss.active) {
+        const boss = state.boss;
+        const barWidth = Math.min(420, width - 42);
+        const progress = clamp(boss.starsCollected / boss.targetStars, 0, 1);
+        const x = (width - barWidth) / 2;
+        const y = 18;
+
+        ctx.fillStyle = "rgba(255, 255, 255, 0.78)";
+        roundedRect(x, y, barWidth, 58, 18);
+        ctx.fill();
+
+        ctx.fillStyle = "rgba(35, 57, 93, 0.16)";
+        roundedRect(x + 16, y + 32, barWidth - 32, 13, 8);
+        ctx.fill();
+
+        const fill = ctx.createLinearGradient(x + 16, 0, x + barWidth - 16, 0);
+        fill.addColorStop(0, "#ffbf47");
+        fill.addColorStop(0.5, "#7adfc4");
+        fill.addColorStop(1, "#c083ff");
+        ctx.fillStyle = fill;
+        roundedRect(x + 16, y + 32, (barWidth - 32) * progress, 13, 8);
+        ctx.fill();
+
+        ctx.fillStyle = "#23395d";
+        ctx.fillText(`Boss ${boss.level} · 阶段 ${boss.phase} · 星星 ${boss.starsCollected}/${boss.targetStars} · ${Math.ceil(boss.timeLeft)}秒`, width / 2, y + 23);
+      }
+
+      if (state.boss.messageTime > 0) {
+        ctx.globalAlpha = Math.min(state.boss.messageTime, 1);
+        ctx.font = "900 34px Trebuchet MS, Comic Sans MS, cursive";
+        ctx.lineWidth = 6;
+        ctx.strokeStyle = "rgba(35, 57, 93, 0.74)";
+        ctx.fillStyle = state.boss.active ? "#ffdf66" : "#7adfc4";
+        ctx.strokeText(state.boss.message, width / 2, 112);
+        ctx.fillText(state.boss.message, width / 2, 112);
+      }
+
+      ctx.restore();
     }
 
     function drawBursts() {
